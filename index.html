@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lyric Card Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c0e;
+    --surface: #141416;
+    --border: #222226;
+    --border2: #2a2a30;
+    --text: #f0f0f4;
+    --muted: #555560;
+    --muted2: #333338;
+    --accent: #ffffff;
+    --warn: #f59e0b;
+    --err: #f87171;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 36px 16px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .wordmark {
+    font-size: 10px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    color: #fff;
+    margin-bottom: 32px;
+  }
+
+  /* ── Steps ── */
+  .steps {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 36px;
+  }
+  .step-btn {
+    padding: 10px 24px;
+    border: none;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .step-btn.active { background: #fff; color: #000; }
+  .step-btn:not(:last-child) { border-right: 1px solid var(--border); }
+
+  /* ── Panels ── */
+  .panel { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 16px; }
+  .panel.hidden { display: none; }
+
+  /* ── Fields ── */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  input[type=text], textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--border2); }
+  textarea { resize: vertical; line-height: 1.7; min-height: 140px; }
+
+  /* ── Buttons ── */
+  .btn {
+    border: none; border-radius: 12px; cursor: pointer;
+    font-family: inherit; font-weight: 700;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-primary { background: #fff; color: #000; padding: 14px; font-size: 15px; width: 100%; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+  .btn-ghost { background: transparent; color: var(--muted); padding: 10px; font-size: 12px; width: 100%; }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-search {
+    background: #fff; color: #000;
+    padding: 0 22px; font-size: 14px; font-weight: 800;
+    border-radius: 10px; border: none; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .btn-search:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Search row ── */
+  .search-row { display: flex; gap: 8px; }
+  .search-row input { font-size: 15px; }
+
+  /* ── Status messages ── */
+  .status { font-size: 13px; padding: 10px 13px; border-radius: 8px; }
+  .status.info  { color: var(--muted); background: var(--surface); }
+  .status.warn  { color: var(--warn); background: #1a1300; border: 1px solid #2a2000; }
+  .status.error { color: var(--err);  background: #1a0808; border: 1px solid #2a1010; }
+
+  /* ── Results ── */
+  .result-item {
+    display: flex; gap: 14px; align-items: center;
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    cursor: pointer; transition: background 0.12s;
+  }
+  .result-item:hover { background: #1c1c1e; }
+  .result-art {
+    width: 52px; height: 52px; border-radius: 8px;
+    object-fit: cover; flex-shrink: 0; background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .result-art img { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; }
+  .result-title { font-weight: 700; font-size: 14px; color: #fff; }
+  .result-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ── Track header (edit step) ── */
+  .track-header {
+    display: flex; gap: 14px; align-items: center;
+    padding: 14px; border-radius: var(--radius);
+    background: var(--surface); border: 1px solid var(--border);
+  }
+  .track-header img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+  .track-header-placeholder { width: 64px; height: 64px; border-radius: 10px; background: var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+  .track-name { font-weight: 800; font-size: 16px; color: #fff; }
+  .track-artist { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ── Card step layout ── */
+  .card-layout {
+    display: flex; gap: 36px; width: 100%; max-width: 980px;
+    flex-wrap: wrap; justify-content: center; align-items: flex-start;
+  }
+  .card-controls { flex: 1 1 280px; max-width: 320px; display: flex; flex-direction: column; gap: 18px; }
+  .card-preview-col { flex: 1 1 320px; max-width: 420px; }
+  .preview-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 4px;
+    color: var(--muted2); margin-bottom: 10px; text-align: center;
+  }
+
+  /* ── Palette swatches ── */
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch {
+    width: 36px; height: 36px; border-radius: 8px;
+    border: 2px solid var(--border2);
+    cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .swatch.active { border: 3px solid #fff; transform: scale(1.2); }
+
+  /* ── Font buttons ── */
+  .font-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .font-btn {
+    padding: 7px 14px; border-radius: 6px;
+    border: 2px solid var(--border);
+    background: var(--surface); color: var(--muted);
+    cursor: pointer; font-size: 13px;
+    transition: all 0.12s;
+  }
+  .font-btn.active { border-color: #fff; background: #fff; color: #000; }
+
+  /* ── Range ── */
+  input[type=range] { width: 100%; accent-color: #fff; }
+
+  /* ── Checkbox row ── */
+  .check-row { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px; color: var(--muted); }
+  .check-row input { accent-color: #fff; width: 15px; height: 15px; }
+
+  /* ── THE CARD ── */
+  #lyric-card {
+    border-radius: 24px;
+    padding: 30px 28px 24px;
+    display: flex; flex-direction: column; gap: 20px;
+    min-height: 380px; position: relative; overflow: hidden;
+  }
+  .card-blob {
+    position: absolute; top: -100px; right: -100px;
+    width: 260px; height: 260px; border-radius: 50%;
+    filter: blur(50px); pointer-events: none;
+  }
+  .card-header { display: flex; align-items: center; gap: 14px; position: relative; }
+  #card-art {
+    width: 60px; height: 60px; border-radius: 10px;
+    object-fit: cover; flex-shrink: 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+  .card-art-placeholder {
+    width: 60px; height: 60px; border-radius: 10px;
+    background: rgba(255,255,255,0.1); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  #card-title { font-weight: 800; font-size: 16px; line-height: 1.2; }
+  #card-artist { font-size: 12px; opacity: 0.6; margin-top: 3px; }
+  .card-divider { height: 1px; opacity: 0.15; }
+  #card-lyrics { flex: 1; }
+  .lyric-line { line-height: 1.55; margin-bottom: 1px; }
+  #card-watermark { margin-top: 8px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.25; }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { display: inline-block; animation: spin 0.9s linear infinite; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    h1 { font-size: 22px; }
+    .step-btn { padding: 9px 14px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wordmark">✦ Lyric Card Studio</div>
+<h1>Make Your Card</h1>
+
+<!-- Steps nav -->
+<div class="steps">
+  <button class="step-btn active" data-step="search" onclick="goStep('search')">① Search</button>
+  <button class="step-btn" data-step="edit" onclick="goStep('edit')">② Edit</button>
+  <button class="step-btn" data-step="card" onclick="goStep('card')">③ Card</button>
+</div>
+
+<!-- ═══════════════════ SEARCH ═══════════════════ -->
+<div id="panel-search" class="panel">
+  <div class="search-row">
+    <input type="text" id="search-input" placeholder="Song name or artist…" onkeydown="if(event.key==='Enter')doSearch()"/>
+    <button class="btn-search" id="search-btn" onclick="doSearch()">Search</button>
+  </div>
+  <div id="search-status" class="status info" style="display:none"></div>
+  <div id="search-results"></div>
+</div>
+
+<!-- ═══════════════════ EDIT ══════════════════════ -->
+<div id="panel-edit" class="panel hidden">
+  <div id="track-header" class="track-header" style="display:none"></div>
+  <div class="field">
+    <label>Song Title</label>
+    <input type="text" id="edit-title" oninput="syncCard()"/>
+  </div>
+  <div class="field">
+    <label>Artist</label>
+    <input type="text" id="edit-artist" oninput="syncCard()"/>
+  </div>
+  <div class="field">
+    <label>Lyrics</label>
+    <div id="lyrics-loading" class="status info" style="display:none"><span class="spinner">⟳</span> Fetching lyrics…</div>
+    <div id="lyrics-warn" class="status warn" style="display:none"></div>
+    <textarea id="edit-lyrics" placeholder="Type or paste lyrics — one line per lyric line." oninput="syncCard()"></textarea>
+    <div style="font-size:11px;color:var(--muted2);margin-top:2px">Keep 4–8 lines for best layout.</div>
+  </div>
+  <button class="btn btn-primary" onclick="goStep('card')">Continue to Card →</button>
+  <button class="btn btn-ghost" onclick="goStep('search')">← Back to search</button>
+</div>
+
+<!-- ═══════════════════ CARD ═══════════════════════ -->
+<div id="panel-card" class="panel hidden" style="max-width:980px">
+  <div class="card-layout">
+
+    <!-- Controls -->
+    <div class="card-controls">
+      <div class="field" id="palette-field" style="display:none">
+        <label>Background (from album art)</label>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div class="field">
+        <label>Font</label>
+        <div class="font-row" id="font-row">
+          <button class="font-btn active" data-font="0" onclick="pickFont(0)" style="font-family:Georgia,serif;font-weight:800">Bold</button>
+          <button class="font-btn" data-font="1" onclick="pickFont(1)" style="font-family:'Trebuchet MS',sans-serif;font-weight:700">Modern</button>
+          <button class="font-btn" data-font="2" onclick="pickFont(2)" style="font-family:Georgia,serif;font-weight:700;font-style:italic">Italic</button>
+          <button class="font-btn" data-font="3" onclick="pickFont(3)" style="font-family:Verdana,sans-serif;font-weight:600">Clean</button>
+        </div>
+      </div>
+      <div class="field">
+        <label id="size-label">Lyrics Size: 22px</label>
+        <input type="range" id="size-slider" min="13" max="34" value="22" oninput="onSizeChange(this.value)"/>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" id="watermark-check" checked onchange="syncCard()"/>
+        Show watermark
+      </label>
+      <button class="btn btn-primary" id="dl-btn" onclick="downloadCard()">⬇ Download PNG</button>
+      <button class="btn btn-ghost" onclick="goStep('edit')">← Edit lyrics</button>
+    </div>
+
+    <!-- Card preview -->
+    <div class="card-preview-col">
+      <div class="preview-label">Preview · export is 3× sharper</div>
+      <div id="lyric-card">
+        <div class="card-blob" id="card-blob"></div>
+        <div class="card-header">
+          <div class="card-art-placeholder" id="card-art-placeholder">🎵</div>
+          <img id="card-art" src="" alt="" style="display:none" crossorigin="anonymous"/>
+          <div>
+            <div id="card-title">Song Title</div>
+            <div id="card-artist">Artist</div>
+          </div>
+        </div>
+        <div class="card-divider" id="card-divider"></div>
+        <div id="card-lyrics"></div>
+        <div id="card-watermark">Lyric Card Studio</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const FONTS = [
+  { fam:"'Georgia', serif",          wt:"800", st:"normal"  },
+  { fam:"'Trebuchet MS', sans-serif", wt:"700", st:"normal"  },
+  { fam:"'Georgia', serif",          wt:"700", st:"italic"  },
+  { fam:"'Verdana', sans-serif",     wt:"600", st:"normal"  },
+];
+let state = {
+  artUrl: "",
+  palette: [],
+  bgColor: { r:20, g:20, b:30 },
+  fontIdx: 0,
+  fontSize: 22,
+  showWatermark: true,
+};
+
+// ── Step navigation ────────────────────────────────────────────
+function goStep(s) {
+  ["search","edit","card"].forEach(id => {
+    document.getElementById("panel-"+id).classList.toggle("hidden", id!==s);
+    document.querySelector(`[data-step="${id}"]`).classList.toggle("active", id===s);
+  });
+  if (s==="card") syncCard();
+}
+
+// ── Search ─────────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById("search-input").value.trim();
+  if (!q) return;
+  const btn = document.getElementById("search-btn");
+  const statusEl = document.getElementById("search-status");
+  const resultsEl = document.getElementById("search-results");
+
+  btn.disabled = true; btn.textContent = "…";
+  statusEl.style.display = "block";
+  statusEl.className = "status info";
+  statusEl.innerHTML = '<span class="spinner">⟳</span> Searching…';
+  resultsEl.innerHTML = "";
+
+  try {
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=8&country=in`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.results?.length) {
+      statusEl.className = "status error";
+      statusEl.textContent = "No results. Try a different spelling.";
+    } else {
+      statusEl.style.display = "none";
+      renderResults(data.results);
+    }
+  } catch(e) {
+    statusEl.className = "status error";
+    statusEl.textContent = "Search failed: " + e.message;
+  }
+  btn.disabled = false; btn.textContent = "Search";
+}
+
+function renderResults(tracks) {
+  const el = document.getElementById("search-results");
+  el.innerHTML = "";
+  tracks.forEach(t => {
+    const artThumb = t.artworkUrl100 || "";
+    const artHD    = artThumb.replace("100x100bb","600x600bb");
+    const item = document.createElement("div");
+    item.className = "result-item";
+    item.innerHTML = `
+      <div class="result-art">${artThumb ? `<img src="${artThumb}" crossorigin="anonymous" alt=""/>` : "🎵"}</div>
+      <div>
+        <div class="result-title">${esc(t.trackName)}</div>
+        <div class="result-sub">${esc(t.artistName)}${t.collectionName ? " · "+esc(t.collectionName) : ""}</div>
+      </div>`;
+    item.onclick = () => pickTrack(t.trackName, t.artistName, artHD);
+    el.appendChild(item);
+  });
+}
+
+// ── Pick track ─────────────────────────────────────────────────
+async function pickTrack(trackName, artistName, artUrl) {
+  document.getElementById("edit-title").value  = trackName;
+  document.getElementById("edit-artist").value = artistName;
+  document.getElementById("edit-lyrics").value = "";
+  state.artUrl = artUrl;
+
+  // Track header
+  const hdr = document.getElementById("track-header");
+  hdr.style.display = "flex";
+  hdr.innerHTML = `
+    ${artUrl ? `<img src="${artUrl}" crossorigin="anonymous" alt="" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 16px rgba(0,0,0,.5)"/>` : `<div class="track-header-placeholder">🎵</div>`}
+    <div>
+      <div class="track-name">${esc(trackName)}</div>
+      <div class="track-artist">${esc(artistName)}</div>
+    </div>`;
+
+  // Load palette in background
+  if (artUrl) loadPalette(artUrl);
+
+  goStep("edit");
+  fetchLyrics(trackName, artistName);
+}
+
+// ── Lyrics fetch ───────────────────────────────────────────────
+async function fetchLyrics(track, artist) {
+  const loadEl = document.getElementById("lyrics-loading");
+  const warnEl = document.getElementById("lyrics-warn");
+  const ta     = document.getElementById("edit-lyrics");
+
+  loadEl.style.display = "block";
+  warnEl.style.display = "none";
+  ta.style.display = "none";
+
+  try {
+    const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(track)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.lyrics) {
+      const lines = data.lyrics.replace(/\r/g,"").split("\n").filter(l=>l.trim());
+      ta.value = lines.slice(0,8).join("\n");
+    } else {
+      warnEl.style.display = "block";
+      warnEl.textContent = "⚠ Lyrics not found — type them in below.";
+    }
+  } catch {
+    warnEl.style.display = "block";
+    warnEl.textContent = "⚠ Couldn't fetch lyrics — type them in below.";
+  }
+
+  loadEl.style.display = "none";
+  ta.style.display = "block";
+  syncCard();
+}
+
+// ── Palette extraction ─────────────────────────────────────────
+function loadPalette(url) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    try {
+      const pal = extractPalette(img, 6);
+      state.palette = pal;
+      if (pal.length) { state.bgColor = pal[0]; syncCard(); }
+      renderSwatches();
+    } catch {}
+  };
+  img.src = url;
+}
+
+function extractPalette(imgEl, count) {
+  const c = document.createElement("canvas"); c.width = 80; c.height = 80;
+  const ctx = c.getContext("2d"); ctx.drawImage(imgEl, 0, 0, 80, 80);
+  const d = ctx.getImageData(0,0,80,80).data;
+  const buckets = {};
+  for (let i=0;i<d.length;i+=4) {
+    if (d[i+3]<128) continue;
+    const r=Math.round(d[i]/28)*28, g=Math.round(d[i+1]/28)*28, b=Math.round(d[i+2]/28)*28;
+    const k=`${r},${g},${b}`; buckets[k]=(buckets[k]||0)+1;
+  }
+  const sorted = Object.entries(buckets).sort((a,b)=>b[1]-a[1]).map(([k])=>k.split(",").map(Number));
+  const pal = [];
+  for (const col of sorted) {
+    if (pal.every(p=>Math.hypot(p[0]-col[0],p[1]-col[1],p[2]-col[2])>70)) pal.push(col);
+    if (pal.length>=count) break;
+  }
+  return pal.map(([r,g,b])=>({r,g,b}));
+}
+
+function renderSwatches() {
+  const field = document.getElementById("palette-field");
+  const box   = document.getElementById("swatches");
+  if (!state.palette.length) { field.style.display="none"; return; }
+  field.style.display = "block";
+  box.innerHTML = "";
+  state.palette.forEach((c,i) => {
+    const btn = document.createElement("button");
+    btn.className = "swatch" + (i===0?" active":"");
+    btn.style.background = toRgb(c);
+    btn.title = toRgb(c);
+    btn.onclick = () => {
+      state.bgColor = c;
+      document.querySelectorAll(".swatch").forEach((s,j)=>s.classList.toggle("active",j===i));
+      syncCard();
+    };
+    box.appendChild(btn);
+  });
+}
+
+// ── Font picker ────────────────────────────────────────────────
+function pickFont(idx) {
+  state.fontIdx = idx;
+  document.querySelectorAll(".font-btn").forEach((b,i)=>b.classList.toggle("active",i===idx));
+  syncCard();
+}
+
+function onSizeChange(v) {
+  state.fontSize = Number(v);
+  document.getElementById("size-label").textContent = `Lyrics Size: ${v}px`;
+  syncCard();
+}
+
+// ── Sync card preview ──────────────────────────────────────────
+function syncCard() {
+  const title    = document.getElementById("edit-title")?.value || "";
+  const artist   = document.getElementById("edit-artist")?.value || "";
+  const lyrics   = document.getElementById("edit-lyrics")?.value || "";
+  const wm       = document.getElementById("watermark-check")?.checked ?? true;
+  const font     = FONTS[state.fontIdx];
+  const bg       = state.bgColor;
+  const dark     = darken(bg, 55);
+  const tc       = textOn(bg);
+
+  const card = document.getElementById("lyric-card");
+  card.style.background = `linear-gradient(150deg,${toRgb(bg)} 0%,${toRgb(dark)} 100%)`;
+
+  // Blob
+  const blob = document.getElementById("card-blob");
+  blob.style.background = tc==="#fff" ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+
+  // Art
+  const artEl = document.getElementById("card-art");
+  const artPH = document.getElementById("card-art-placeholder");
+  if (state.artUrl) {
+    artEl.src = state.artUrl; artEl.style.display="block"; artPH.style.display="none";
+  } else {
+    artEl.style.display="none"; artPH.style.display="flex";
+  }
+
+  // Text
+  document.getElementById("card-title").textContent  = title  || "Song Title";
+  document.getElementById("card-artist").textContent = artist || "Artist";
+  [document.getElementById("card-title"),
+   document.getElementById("card-artist"),
+   document.getElementById("card-lyrics"),
+   document.getElementById("card-watermark")
+  ].forEach(el => { if(el) el.style.color = tc; });
+
+  document.getElementById("card-divider").style.background = tc;
+
+  // Lyrics
+  const lyricsEl = document.getElementById("card-lyrics");
+  const lines = lyrics.split("\n").filter(Boolean);
+  if (lines.length) {
+    lyricsEl.innerHTML = lines.map(l =>
+      `<div class="lyric-line" style="font-family:${font.fam};font-weight:${font.wt};font-style:${font.st};font-size:${state.fontSize}px;color:${tc}">${esc(l)}</div>`
+    ).join("");
+  } else {
+    lyricsEl.innerHTML = `<div style="color:${tc};opacity:0.3;font-style:italic;font-size:14px">Your lyrics appear here…</div>`;
+  }
+
+  // Watermark
+  const wmEl = document.getElementById("card-watermark");
+  wmEl.style.display = wm ? "block" : "none";
+}
+
+// ── Download ───────────────────────────────────────────────────
+async function downloadCard() {
+  const btn = document.getElementById("dl-btn");
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    const title = document.getElementById("edit-title").value || "lyrics";
+    const canvas = await html2canvas(document.getElementById("lyric-card"), {
+      scale: 3, useCORS: true, allowTaint: true, backgroundColor: null, logging: false,
+    });
+    const a = document.createElement("a");
+    a.download = title.replace(/\s+/g,"_") + "_lyric_card.png";
+    a.href = canvas.toDataURL("image/png", 1.0);
+    a.click();
+  } catch(e) { alert("Download failed: " + e.message); }
+  btn.disabled = false; btn.textContent = "⬇ Download PNG";
+}
+
+// ── Color utils ────────────────────────────────────────────────
+function luminance(r,g,b) {
+  return [r,g,b].map(v=>{v/=255;return v<=0.03928?v/12.92:((v+0.055)/1.055)**2.4})
+    .reduce((a,v,i)=>a+v*[0.2126,0.7152,0.0722][i],0);
+}
+function cr(r1,g1,b1,r2,g2,b2) {
+  const l1=luminance(r1,g1,b1),l2=luminance(r2,g2,b2);
+  return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);
+}
+function textOn({r,g,b}) { return cr(r,g,b,255,255,255)>cr(r,g,b,0,0,0)?"#fff":"#000"; }
+function darken({r,g,b},a=60) { return {r:Math.max(0,r-a),g:Math.max(0,g-a),b:Math.max(0,b-a)}; }
+function toRgb({r,g,b}) { return `rgb(${r},${g},${b})`; }
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// Init
+syncCard();
+</script>
+</body>
+</html>
